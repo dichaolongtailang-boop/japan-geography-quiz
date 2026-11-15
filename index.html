@@ -1,42 +1,20 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>都道府県アキネーター</title>
 <style>
-body {
-  font-family: sans-serif;
-  background: #eef3ff;
-  text-align: center;
-  padding: 20px;
-  color: #223;
-}
-main { max-width: 500px; margin: auto; }
-section {
-  background: white;
-  padding: 20px;
-  border-radius: 16px;
-  margin: 15px 0;
-}
-button, input {
-  font-size: 17px;
-  padding: 12px;
-  margin: 6px;
-  border-radius: 9px;
-}
-button {
-  background: #315bd6;
-  color: white;
-  border: 0;
-}
-input {
-  max-width: 90%;
-  border: 1px solid #aaa;
-}
-.hidden { display: none; }
-li { margin: 8px; text-align: left; }
+body{font-family:sans-serif;background:#eef3ff;text-align:center;padding:16px;color:#223}
+main{max-width:520px;margin:auto}
+section{background:white;padding:20px;border-radius:16px;margin:15px 0}
+button,input{font-size:17px;padding:12px;margin:6px;border-radius:9px;box-sizing:border-box}
+button{background:#315bd6;color:white;border:0}
+input{max-width:95%;border:1px solid #aaa}
+.hidden{display:none}
+li{text-align:left;margin:8px}
+#result,#answerLog{white-space:pre-wrap}
+#answerLog{background:#f3f6ff;padding:12px;border-radius:10px}
 </style>
 </head>
 <body>
@@ -45,74 +23,59 @@ li { margin: 8px; text-align: left; }
 <p id="status">Firebase接続中...</p>
 
 <section id="lobby">
-  <h2>ルームを作ろう</h2>
-  <button id="create">ルームを作成</button>
-  <h3>または参加</h3>
-  <input id="code" placeholder="ルームコード">
-  <button id="join">参加する</button>
+<h2>ニックネーム（1〜12文字）</h2>
+<input id="nickname" maxlength="12" placeholder="ニックネーム">
+<h2>ルームを作ろう</h2>
+<button id="create">ルームを作成</button>
+<h3>または参加</h3>
+<input id="code" placeholder="ルームコード">
+<button id="join">参加する</button>
 </section>
 
 <section id="room" class="hidden">
-  <h2>ルームコード</h2>
-  <h1 id="roomCode"></h1>
-  <h3>参加プレイヤー</h3>
-  <ul id="players"></ul>
-  <p id="waiting">参加者を待っています</p>
-  <button id="start" class="hidden">ゲーム開始！</button>
+<h2>ルームコード</h2>
+<h1 id="roomCode"></h1>
+<h3>参加プレイヤー</h3>
+<ul id="players"></ul>
+<p id="waiting"></p>
+<button id="start" class="hidden">ゲーム開始！</button>
 </section>
 
 <section id="game" class="hidden">
-  <h2>ゲーム中！</h2>
-  <p id="questionCount">質問数：0</p>
-  <h3>質問を入力</h3>
-  <input id="question" placeholder="例：海に面していますか？">
-  <button id="ask">質問する</button>
-  <ul id="questions"></ul>
-  <hr>
-  <h3>都道府県を予想！</h3>
-  <input id="guess" placeholder="都道府県名">
-  <button id="answer">回答する</button>
-  <h3 id="result"></h3>
+<h2>ゲーム中！</h2>
+<p id="questionCount">質問数：0</p>
+<h3>質問を入力</h3>
+<input id="question" placeholder="例：海に面していますか？">
+<button id="ask">質問する</button>
+<p id="answerLog">質問するとコンピューターが回答するよ。</p>
+<hr>
+<h3>都道府県を予想！</h3>
+<input id="guess" placeholder="都道府県名">
+<button id="answer">回答する</button>
+<h3 id="result"></h3>
 </section>
 </main>
 
 <script type="module">
-import { initializeApp }
-from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import{getAuth,signInAnonymously}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import{getDatabase,ref,set,get,update,onValue,runTransaction}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
-import {
-  getAuth,
-  signInAnonymously
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+const app=initializeApp({
+ apiKey:"AIzaSyCYbFmB_DHeN7f6u__XCXi1I6E2YFdyz_A",
+ authDomain:"prefecture-akinator-battle.firebaseapp.com",
+ databaseURL:"https://prefecture-akinator-battle-default-rtdb.asia-southeast1.firebasedatabase.app",
+ projectId:"prefecture-akinator-battle",
+ storageBucket:"prefecture-akinator-battle.firebasestorage.app",
+ messagingSenderId:"298658912619",
+ appId:"1:298658912619:web:8504bc936d515bffcc942e"
+});
 
-import {
-  getDatabase,
-  ref,
-  set,
-  get,
-  update,
-  onValue,
-  runTransaction,
-  push
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+const auth=getAuth(app);
+const db=getDatabase(app);
+const $=id=>document.getElementById(id);
 
-// Firebase設定
-const firebaseConfig = {
-  apiKey: "AIzaSyCYbFmB_DHeN7f6u__XCXi1I6E2YFdyz_A",
-  authDomain: "prefecture-akinator-battle.firebaseapp.com",
-  databaseURL: "https://prefecture-akinator-battle-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "prefecture-akinator-battle",
-  storageBucket: "prefecture-akinator-battle.firebasestorage.app",
-  messagingSenderId: "298658912619",
-  appId: "1:298658912619:web:8504bc936d515bffcc942e",
-  measurementId: "G-D2RLWVT74C"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
-
-const prefectures = [
+const prefs=[
 "北海道","青森県","岩手県","宮城県","秋田県","山形県",
 "福島県","茨城県","栃木県","群馬県","埼玉県","千葉県",
 "東京都","神奈川県","新潟県","富山県","石川県","福井県",
@@ -123,257 +86,279 @@ const prefectures = [
 "熊本県","大分県","宮崎県","鹿児島県","沖縄県"
 ];
 
-let user = null;
-let room = null;
-let roomData = null;
-let listening = false;
+const regions={
+"北海道":["北海道"],
+"東北":["青森県","岩手県","宮城県","秋田県","山形県","福島県"],
+"関東":["茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県"],
+"中部":["新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県"],
+"近畿":["三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県"],
+"中国":["鳥取県","島根県","岡山県","広島県","山口県"],
+"四国":["徳島県","香川県","愛媛県","高知県"],
+"九州":["福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"]
+};
 
-const $ = id => document.getElementById(id);
-const roomRef = () => ref(db, "rooms/" + room);
+const inland=[
+"栃木県","群馬県","埼玉県","山梨県",
+"長野県","岐阜県","滋賀県","奈良県"
+];
 
-// 匿名ログイン
-try {
-  const result = await signInAnonymously(auth);
-  user = result.user;
-  $("status").textContent = "オンライン接続完了";
-} catch (error) {
-  $("status").textContent = "接続エラー：" + error.message;
+let user=null;
+let room=null;
+let rd=null;
+let name="";
+let off=null;
+
+const roomRef=()=>ref(db,"rooms/"+room);
+
+function norm(s){
+ return s.replace(/[？?。、！!\s]/g,"");
 }
 
-// ルームの監視
-function listen() {
-  if (listening) return;
-  listening = true;
+// コンピューターの質問回答
+function autoAnswer(q,a){
+ q=norm(q);
 
-  onValue(roomRef(), snapshot => {
-    roomData = snapshot.val();
+ for(const [r,ps] of Object.entries(regions)){
+  if(q.includes(r+"地方")){
+   return ps.includes(a)?"はい！":"いいえ。";
+  }
+ }
 
-    if (!roomData) return;
+ if(/海に面|海があります|海岸|海に接/.test(q)){
+  return inland.includes(a)?"いいえ。":"はい！";
+ }
 
-    $("lobby").classList.add("hidden");
-    $("room").classList.remove("hidden");
-    $("roomCode").textContent = room;
+ const p=prefs.find(x=>q.includes(x));
 
-    $("players").innerHTML = "";
+ if(p&&/(ですか|でしょうか|ありますか)/.test(q)){
+  return p===a?"はい！":"いいえ。";
+ }
 
-    Object.entries(roomData.players || {}).forEach(([id, p]) => {
-      const li = document.createElement("li");
-      li.textContent = p.name +
-        (id === roomData.host ? "（作成者）" : "");
-      $("players").appendChild(li);
-    });
+ return "その質問はまだ判定できないよ。別の聞き方を試してね。";
+}
 
-    if (roomData.state === "waiting") {
-      $("start").classList.toggle(
-        "hidden",
-        roomData.host !== user.uid
-      );
+// 正解発表
+function renderWinner(d){
+ if(d.state==="finished"){
+  $("result").textContent=
+   (d.winnerName||d.players?.[d.winner]?.name||"誰か")
+   +"さんが正解しました！\n"+
+   "正解は"+d.answer+"！\n"+
+   "獲得ポイント："+d.score+"点";
+ }
+}
 
-      $("waiting").textContent =
-        roomData.host === user.uid
-        ? "参加者がそろったら開始！"
-        : "開始を待っています";
+// ルームのリアルタイム監視
+function listen(){
+ if(off)off();
 
-      $("game").classList.add("hidden");
-    } else {
-      $("start").classList.add("hidden");
-      $("game").classList.remove("hidden");
+ off=onValue(roomRef(),s=>{
+  rd=s.val();
+  if(!rd)return;
 
-      $("questionCount").textContent =
-        "質問数：" + (roomData.count || 0);
+  $("lobby").classList.add("hidden");
+  $("room").classList.remove("hidden");
+  $("roomCode").textContent=room;
 
-      $("questions").innerHTML = "";
+  $("players").innerHTML="";
 
-      Object.values(roomData.questions || {}).forEach(q => {
-        const li = document.createElement("li");
-        li.textContent = q;
-        $("questions").appendChild(li);
-      });
-
-      if (roomData.state === "finished") {
-        $("result").textContent =
-          "正解は " + roomData.answer + "！";
-        $("result").textContent +=
-          " 勝者：" + (roomData.players?.[roomData.winner]?.name || "プレイヤー");
-        $("result").textContent +=
-          " ／ 得点：" + roomData.score + "点";
-      }
-    }
+  Object.entries(rd.players||{}).forEach(([id,p])=>{
+   let li=document.createElement("li");
+   li.textContent=p.name+(id===rd.host?"（作成者）":"");
+   $("players").append(li);
   });
+
+  if(rd.state==="waiting"){
+   $("start").classList.toggle("hidden",rd.host!==user.uid);
+   $("waiting").textContent=
+    rd.host===user.uid
+    ?"参加者がそろったら開始！"
+    :"開始を待っています";
+
+   $("game").classList.add("hidden");
+  }else{
+   $("start").classList.add("hidden");
+   $("game").classList.remove("hidden");
+
+   $("questionCount").textContent=
+    "質問数："+(rd.count||0);
+
+   renderWinner(rd);
+  }
+ });
+}
+
+// ニックネーム確認
+function getName(){
+ let n=$("nickname").value.trim();
+
+ if(!n||n.length>12){
+  alert("ニックネームを1〜12文字で入力してね");
+  return null;
+ }
+
+ return n;
 }
 
 // ルーム作成
-async function createRoom() {
-  const newRoom = Math.random()
-    .toString(36).slice(2, 8).toUpperCase();
+$("create").onclick=async()=>{
+ if(!user)return alert("接続中です。少し待ってね");
 
-  const newRef = ref(db, "rooms/" + newRoom);
-  const existing = await get(newRef);
+ name=getName();
+ if(!name)return;
 
-  if (existing.exists()) {
-    return createRoom();
+ try{
+  room=Math.random().toString(36).slice(2,8).toUpperCase();
+
+  let r=ref(db,"rooms/"+room);
+
+  if((await get(r)).exists()){
+   return $("create").click();
   }
 
-  room = newRoom;
-
-  await set(roomRef(), {
-    host: user.uid,
-    state: "waiting",
-    players: {
-      [user.uid]: {
-        name: "プレイヤー" + user.uid.slice(0, 4)
-      }
-    }
+  await set(r,{
+   host:user.uid,
+   state:"waiting",
+   players:{
+    [user.uid]:{name}
+   }
   });
 
   listen();
-}
-
-$("create").onclick = async () => {
-  if (!user) {
-    alert("接続中です。少し待ってね");
-    return;
-  }
-
-  try {
-    await createRoom();
-  } catch (error) {
-    alert("ルーム作成エラー：" + error.message);
-  }
+ }catch(e){
+  alert("作成エラー："+e.message);
+ }
 };
 
 // ルーム参加
-$("join").onclick = async () => {
-  if (!user) {
-    alert("接続中です。少し待ってね");
-    return;
+$("join").onclick=async()=>{
+ if(!user)return alert("接続中です");
+
+ name=getName();
+ if(!name)return;
+
+ room=$("code").value.trim().toUpperCase();
+
+ if(!room)return alert("ルームコードを入力してね");
+
+ try{
+  let s=await get(roomRef());
+
+  if(!s.exists()||s.val().state!=="waiting"){
+   room=null;
+   return alert("参加できるルームが見つかりません");
   }
 
-  const code = $("code").value.trim().toUpperCase();
+  await set(
+   ref(db,"rooms/"+room+"/players/"+user.uid),
+   {name}
+  );
 
-  if (!code) {
-    alert("ルームコードを入力してね");
-    return;
-  }
-
-  room = code;
-  listening = false;
-
-  try {
-    const snapshot = await get(roomRef());
-
-    if (!snapshot.exists()) {
-      alert("ルームが見つかりません");
-      room = null;
-      return;
-    }
-
-    const data = snapshot.val();
-
-    if (data.state !== "waiting") {
-      alert("このルームはゲーム中です");
-      room = null;
-      return;
-    }
-
-    await update(
-      ref(db, "rooms/" + room + "/players/" + user.uid),
-      { name: "プレイヤー" + user.uid.slice(0, 4) }
-    );
-
-    listen();
-  } catch (error) {
-    alert("参加エラー：" + error.message);
-  }
+  listen();
+ }catch(e){
+  alert("参加エラー："+e.message);
+ }
 };
 
 // ゲーム開始
-$("start").onclick = async () => {
-  if (!roomData || roomData.host !== user.uid) return;
+$("start").onclick=async()=>{
+ if(rd?.host!==user.uid)return;
 
-  const answer = prefectures[
-    Math.floor(Math.random() * prefectures.length)
-  ];
+ let a=prefs[Math.floor(Math.random()*prefs.length)];
 
-  try {
-    await update(roomRef(), {
-      state: "playing",
-      answer: answer,
-      startedAt: Date.now(),
-      count: 0,
-      questions: {}
-    });
-  } catch (error) {
-    alert(error.message);
-  }
+ try{
+  await update(roomRef(),{
+   state:"playing",
+   answer:a,
+   startedAt:Date.now(),
+   count:0,
+   winner:null,
+   winnerName:null,
+   score:null
+  });
+
+  $("answerLog").textContent=
+   "質問するとコンピューターが回答するよ。";
+
+  $("result").textContent="";
+ }catch(e){
+  alert("開始エラー："+e.message);
+ }
 };
 
 // 質問
-$("ask").onclick = async () => {
-  const q = $("question").value.trim();
+$("ask").onclick=async()=>{
+ let q=$("question").value.trim();
 
-  if (!q || !roomData || roomData.state !== "playing") return;
+ if(!q||rd?.state!=="playing")return;
 
-  try {
-    const questionsRef = ref(db, "rooms/" + room + "/questions");
-    const newQuestion = push(questionsRef);
+ let a=autoAnswer(q,rd.answer);
 
-    await set(newQuestion, q);
-
-    await runTransaction(
-      ref(db, "rooms/" + room + "/count"),
-      count => (count || 0) + 1
-    );
-
-    $("question").value = "";
-  } catch (error) {
-    alert("質問エラー：" + error.message);
-  }
-};
-
-// 回答
-$("answer").onclick = async () => {
-  const guess = $("guess").value.trim();
-
-  if (!guess || !roomData || roomData.state !== "playing") return;
-
-  if (guess !== roomData.answer) {
-    $("result").textContent = "違うみたい。もう一度考えてね！";
-    return;
-  }
-
-  const elapsed = Math.floor(
-    (Date.now() - roomData.startedAt) / 10000
+ try{
+  await runTransaction(
+   ref(db,"rooms/"+room+"/count"),
+   n=>(n||0)+1
   );
 
-  const count = roomData.count || 0;
+  $("answerLog").textContent=
+   "あなたの質問："+q+"\n"+
+   "コンピューター："+a;
 
-  // 10秒ごとに1点、3問ごとに2点減点
-  const score = Math.max(
-    1,
-    100 - elapsed - Math.floor(count / 3) * 2
-  );
-
-  try {
-    const result = await runTransaction(roomRef(), old => {
-      if (!old || old.state !== "playing") return;
-
-      old.state = "finished";
-      old.winner = user.uid;
-      old.score = score;
-
-      return old;
-    });
-
-    if (result.committed) {
-      $("result").textContent = "正解！獲得ポイント：" + score;
-    } else {
-      $("result").textContent = "ゲームは終了しています";
-    }
-  } catch (error) {
-    alert("回答エラー：" + error.message);
-  }
+  $("question").value="";
+ }catch(e){
+  alert("質問エラー："+e.message);
+ }
 };
+
+// 都道府県の回答
+$("answer").onclick=async()=>{
+ let g=norm($("guess").value.trim());
+
+ if(!g||rd?.state!=="playing")return;
+
+ if(g!==rd.answer){
+  $("result").textContent=
+   "違うみたい。もう一度考えてね！";
+  return;
+ }
+
+ let score=Math.max(
+  1,
+  100-
+  Math.floor((Date.now()-rd.startedAt)/10000)-
+  Math.floor((rd.count||0)/3)*2
+ );
+
+ try{
+  const t=await runTransaction(roomRef(),old=>{
+   if(!old||old.state!=="playing")return;
+
+   old.state="finished";
+   old.winner=user.uid;
+   old.winnerName=old.players?.[user.uid]?.name||name;
+   old.score=score;
+
+   return old;
+  });
+
+  if(!t.committed){
+   $("result").textContent="ゲームは終了しています";
+  }else{
+   renderWinner(t.snapshot.val());
+  }
+ }catch(e){
+  alert("回答エラー："+e.message);
+ }
+};
+
+// Firebaseログイン
+try{
+ let x=await signInAnonymously(auth);
+ user=x.user;
+ $("status").textContent="オンライン接続完了";
+}catch(e){
+ $("status").textContent="接続エラー："+e.message;
+}
 </script>
 </body>
 </html>
