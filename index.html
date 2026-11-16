@@ -19,7 +19,6 @@ input{max-width:95%;border:1px solid #aaa}
 .timer{font-size:44px;font-weight:bold;color:#d33;font-variant-numeric:tabular-nums}
 #feedback{font-weight:bold;min-height:28px}
 #ranking{text-align:left}
-small{color:#667}
 </style>
 </head>
 <body>
@@ -94,16 +93,6 @@ const prefs=[
 "熊本県","大分県","宮崎県","鹿児島県","沖縄県"
 ];
 
-const capitals=[
-"札幌市","青森市","盛岡市","仙台市","秋田市","山形市","福島市",
-"水戸市","宇都宮市","前橋市","さいたま市","千葉市","新宿区",
-"横浜市","新潟市","富山市","金沢市","福井市","甲府市","長野市",
-"岐阜市","静岡市","名古屋市","津市","大津市","京都市","大阪市",
-"神戸市","奈良市","和歌山市","鳥取市","松江市","岡山市","広島市",
-"山口市","徳島市","高松市","松山市","高知市","福岡市","佐賀市",
-"長崎市","熊本市","大分市","宮崎市","鹿児島市","那覇市"
-];
-
 const shinkansen=[
 "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
 "栃木県","群馬県","埼玉県","東京都","新潟県","富山県","石川県",
@@ -145,15 +134,18 @@ const capitalMatch=[
 "大分県","宮崎県","鹿児島県"
 ];
 
-const profiles=prefs.map((p,i)=>({
+// 都道府県ごとのヒント
+const profiles=prefs.map(p=>({
 p,
-capital:capitals[i],
 clues:[
 ["新幹線の駅がある",shinkansen.includes(p)],
 ["空港がある",airports.includes(p)],
 ["海に面している",coast.includes(p)],
 ["県名と県庁所在地名が一致する",capitalMatch.includes(p)],
-["政令指定都市が1つ以上ある",designated.includes(p)]
+["政令指定都市が1つ以上ある",designated.includes(p)],
+["日本一高い山（富士山）がある",["山梨県","静岡県"].includes(p)],
+["日本一広い湖（琵琶湖）がある",p==="滋賀県"],
+["日本一長い川（信濃川）が流れている",["新潟県","長野県"].includes(p)]
 ]
 }));
 
@@ -219,13 +211,7 @@ $("clues").innerHTML="";
 
 q.clues.forEach(c=>{
 let li=document.createElement("li");
-
-if(c.label==="県名と県庁所在地名が一致する"){
 li.textContent=c.label+"："+(c.value?"はい":"いいえ");
-}else{
-li.textContent=c.label+"："+(c.value?"ある":"ない");
-}
-
 $("clues").append(li);
 });
 
@@ -390,8 +376,6 @@ scores[id]=0;
 });
 
 try{
-shownRound=-1;
-
 await update(roomRef(),{
 state:"playing",
 startedAt:Date.now(),
@@ -400,7 +384,6 @@ questions,
 scores,
 lastWinnerName:""
 });
-
 }catch(e){
 alert("開始エラー："+e.message);
 }
