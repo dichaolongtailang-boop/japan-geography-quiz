@@ -4,36 +4,39 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>都道府県アキネーター</title>
+<title>観光地で都道府県バトル</title>
 <style>
 *{box-sizing:border-box}
-body{font-family:sans-serif;background:#eef3ff;text-align:center;padding:14px;color:#223;margin:0}
-main{max-width:620px;margin:auto}
-section{background:white;padding:18px;border-radius:16px;margin:14px 0;box-shadow:0 2px 10px #ccd5eb}
+body{font-family:sans-serif;background:#eef3ff;color:#223;margin:0;padding:14px;text-align:center}
+main{max-width:680px;margin:auto}
+section{background:#fff;padding:18px;border-radius:16px;margin:14px 0;box-shadow:0 2px 10px #ccd5eb}
 button,input{font-size:17px;padding:12px;margin:6px;border-radius:9px}
-button{background:#315bd6;color:white;border:0}
+button{background:#315bd6;color:white;border:0;cursor:pointer}
+button:disabled{opacity:.5}
 input{max-width:95%;border:1px solid #aaa}
-.hidden{display:none}
-.clues{text-align:left;background:#f3f6ff;padding:14px;border-radius:12px;margin:12px 0}
-.clues li{margin:9px 0;font-size:18px}
-.timer{font-size:44px;font-weight:bold;color:#d33;font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+.timer{font-size:48px;font-weight:bold;color:#d33;font-variant-numeric:tabular-nums}
+#places{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0;list-style:none}
+#places li{background:#f3f6ff;border-radius:12px;padding:16px 8px;font-size:18px;font-weight:bold}
 #feedback{font-weight:bold;min-height:28px}
-#ranking{text-align:left}
+#ranking{text-align:left;max-width:420px;margin:auto}
+.muted{color:#667;font-size:14px}
 </style>
 </head>
 <body>
 <main>
-<h1>🗾 都道府県アキネーター</h1>
+<h1>🗾 観光地で都道府県バトル</h1>
 <p id="status">Firebase接続中...</p>
 
 <section id="lobby">
-<h2>ニックネーム（1〜12文字）</h2>
+<h2>ニックネーム</h2>
 <input id="nickname" maxlength="12" placeholder="ニックネーム">
-<h2>ルームを作ろう</h2>
+<h2>ルームを作成</h2>
 <button id="create">ルームを作成</button>
-<h3>または参加</h3>
-<input id="code" placeholder="ルームコード">
+<h3>またはルームに参加</h3>
+<input id="code" maxlength="6" placeholder="ルームコード">
 <button id="join">参加する</button>
+<p class="muted">同じルームの全員に同じ問題が表示されます。</p>
 </section>
 
 <section id="room" class="hidden">
@@ -42,405 +45,275 @@ input{max-width:95%;border:1px solid #aaa}
 <h3>参加プレイヤー</h3>
 <ul id="players"></ul>
 <p id="waiting"></p>
-<button id="start" class="hidden">ゲーム開始！</button>
+<button id="start" class="hidden">スタート！</button>
 </section>
 
 <section id="game" class="hidden">
-<h2>早押しバトル！</h2>
+<h2>観光地を見て都道府県を当てよう！</h2>
 <div class="timer" id="timer">100</div>
 <p id="progress">第1問</p>
-<h2>この都道府県はどこ？</h2>
-<div class="clues"><ul id="clues"></ul></div>
-<input id="guess" placeholder="都道府県名を入力">
+<h3>この観光地がある都道府県は？</h3>
+<ul id="places"></ul>
+<input id="guess" placeholder="例：三重県">
 <button id="answer">回答する</button>
-<p id="feedback"></p>
+<p id="feedback" aria-live="polite"></p>
 <p id="lastWinner"></p>
+<p class="muted">間違えても何度でも回答できます。誰かが正解すると全員次の問題へ進みます。</p>
 </section>
 
 <section id="finish" class="hidden">
 <h2>🏆 最終ランキング</h2>
 <ol id="ranking"></ol>
-<p id="finishMessage"></p>
+<p id="finishMessage">100秒終了！</p>
 </section>
 </main>
 
 <script type="module">
-import{initializeApp}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import{getAuth,signInAnonymously}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import{getDatabase,ref,set,get,update,onValue,runTransaction}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,signInAnonymously} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getDatabase,ref,set,get,update,onValue,runTransaction} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
-const app=initializeApp({
-apiKey:"AIzaSyCYbFmB_DHeN7f6u__XCXi1I6E2YFdyz_A",
-authDomain:"prefecture-akinator-battle.firebaseapp.com",
-databaseURL:"https://prefecture-akinator-battle-default-rtdb.asia-southeast1.firebasedatabase.app",
-projectId:"prefecture-akinator-battle",
-storageBucket:"prefecture-akinator-battle.firebasestorage.app",
-messagingSenderId:"298658912619",
-appId:"1:298658912619:web:8504bc936d515bffcc942e"
-});
-
+const firebaseConfig = {
+  apiKey:"AIzaSyCYbFmB_DHeN7f6u__XCXi1I6E2YFdyz_A",
+  authDomain:"prefecture-akinator-battle.firebaseapp.com",
+  databaseURL:"https://prefecture-akinator-battle-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"prefecture-akinator-battle",
+  storageBucket:"prefecture-akinator-battle.firebasestorage.app",
+  messagingSenderId:"298658912619",
+  appId:"1:298658912619:web:8504bc936d515bffcc942e"
+};
+const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const db=getDatabase(app);
 const $=id=>document.getElementById(id);
 
-const prefs=[
-"北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
-"茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
-"新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県",
-"静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県",
-"奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県",
-"徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県",
-"熊本県","大分県","宮崎県","鹿児島県","沖縄県"
+/* 各都道府県の代表的な観光地 */
+const quizData = [
+["北海道",["札幌時計台","小樽運河","旭山動物園","函館山"]],
+["青森県",["弘前城","奥入瀬渓流","十和田湖","三内丸山遺跡"]],
+["岩手県",["中尊寺","小岩井農場","浄土ヶ浜","龍泉洞"]],
+["宮城県",["松島","瑞鳳殿","仙台城跡","秋保大滝"]],
+["秋田県",["角館武家屋敷","田沢湖","乳頭温泉郷","なまはげ館"]],
+["山形県",["銀山温泉","山寺（立石寺）","蔵王温泉","加茂水族館"]],
+["福島県",["鶴ヶ城","大内宿","五色沼","スパリゾートハワイアンズ"]],
+["茨城県",["国営ひたち海浜公園","偕楽園","袋田の滝","大洗磯前神社"]],
+["栃木県",["日光東照宮","華厳の滝","中禅寺湖","あしかがフラワーパーク"]],
+["群馬県",["草津温泉","富岡製糸場","吹割の滝","伊香保温泉"]],
+["埼玉県",["川越蔵造りの町並み","長瀞渓谷","鉄道博物館","三峯神社"]],
+["千葉県",["成田山新勝寺","鴨川シーワールド","鋸山","九十九里浜"]],
+["東京都",["浅草寺","東京スカイツリー","明治神宮","高尾山"]],
+["神奈川県",["横浜中華街","鎌倉大仏","箱根温泉","江の島"]],
+["新潟県",["佐渡金山","清津峡","彌彦神社","笹川流れ"]],
+["富山県",["立山黒部アルペンルート","黒部峡谷","五箇山","雨晴海岸"]],
+["石川県",["兼六園","ひがし茶屋街","千里浜なぎさドライブウェイ","和倉温泉"]],
+["福井県",["東尋坊","福井県立恐竜博物館","永平寺","三方五湖"]],
+["山梨県",["富士山","河口湖","忍野八海","昇仙峡"]],
+["長野県",["善光寺","松本城","上高地","地獄谷野猿公苑"]],
+["岐阜県",["白川郷","飛騨高山の古い町並み","下呂温泉","岐阜城"]],
+["静岡県",["三保松原","熱海温泉","浜名湖","久能山東照宮"]],
+["愛知県",["名古屋城","熱田神宮","犬山城","レゴランド・ジャパン"]],
+["三重県",["伊勢神宮","なばなの里","鳥羽水族館","熊野古道"]],
+["滋賀県",["彦根城","琵琶湖","比叡山延暦寺","近江八幡の水郷"]],
+["京都府",["清水寺","金閣寺","伏見稲荷大社","嵐山"]],
+["大阪府",["大阪城","ユニバーサル・スタジオ・ジャパン","通天閣","海遊館"]],
+["兵庫県",["姫路城","有馬温泉","神戸北野異人館街","竹田城跡"]],
+["奈良県",["東大寺","奈良公園","法隆寺","吉野山"]],
+["和歌山県",["高野山","白浜・白良浜","那智の滝","アドベンチャーワールド"]],
+["鳥取県",["鳥取砂丘","水木しげるロード","大山","三朝温泉"]],
+["島根県",["出雲大社","足立美術館","石見銀山","宍道湖"]],
+["岡山県",["倉敷美観地区","岡山後楽園","備中松山城","吉備津神社"]],
+["広島県",["厳島神社","原爆ドーム","尾道の町並み","しまなみ海道"]],
+["山口県",["角島大橋","錦帯橋","元乃隅神社","秋芳洞"]],
+["徳島県",["鳴門の渦潮","大塚国際美術館","祖谷のかずら橋","阿波おどり会館"]],
+["香川県",["栗林公園","金刀比羅宮","小豆島","父母ヶ浜"]],
+["愛媛県",["道後温泉","松山城","しまなみ海道","下灘駅"]],
+["高知県",["桂浜","高知城","四万十川","仁淀川"]],
+["福岡県",["太宰府天満宮","門司港レトロ","櫛田神社","糸島"]],
+["佐賀県",["吉野ヶ里歴史公園","有田の町並み","唐津城","祐徳稲荷神社"]],
+["長崎県",["ハウステンボス","軍艦島","グラバー園","大浦天主堂"]],
+["熊本県",["熊本城","阿蘇山","黒川温泉","水前寺成趣園"]],
+["大分県",["別府地獄めぐり","由布院温泉","宇佐神宮","九重夢大吊橋"]],
+["宮崎県",["高千穂峡","青島神社","鵜戸神宮","都井岬"]],
+["鹿児島県",["桜島","屋久島","仙巌園","知覧特攻平和会館"]],
+["沖縄県",["首里城","美ら海水族館","古宇利島","石垣島"]]
 ];
 
-const shinkansen=[
-"北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
-"栃木県","群馬県","埼玉県","東京都","新潟県","富山県","石川県",
-"福井県","長野県","岐阜県","静岡県","愛知県","滋賀県","京都府",
-"大阪府","兵庫県","岡山県","広島県","山口県","福岡県","熊本県",
-"鹿児島県"
-];
-
-const airports=[
-"北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
-"茨城県","千葉県","東京都","新潟県","富山県","石川県","福井県",
-"長野県","静岡県","愛知県","大阪府","兵庫県","鳥取県","島根県",
-"岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県",
-"福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県",
-"沖縄県"
-];
-
-const coast=[
-"北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
-"茨城県","千葉県","東京都","神奈川県","新潟県","富山県","石川県",
-"福井県","静岡県","愛知県","三重県","京都府","大阪府","兵庫県",
-"和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県",
-"香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県",
-"大分県","宮崎県","鹿児島県","沖縄県"
-];
-
-const designated=[
-"神奈川県","埼玉県","千葉県","新潟県","静岡県","愛知県",
-"大阪府","京都府","兵庫県","岡山県","広島県","福岡県","熊本県"
-];
-
-const capitalMatch=[
-"青森県","岩手県","宮城県","秋田県","山形県","福島県",
-"茨城県","栃木県","群馬県","埼玉県","千葉県","新潟県",
-"富山県","福井県","山梨県","長野県","岐阜県","静岡県",
-"三重県","滋賀県","京都府","大阪府","奈良県","和歌山県",
-"鳥取県","岡山県","広島県","山口県","徳島県","香川県",
-"愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県",
-"大分県","宮崎県","鹿児島県"
-];
-
-// 都道府県ごとのヒント
-const profiles=prefs.map(p=>({
-p,
-clues:[
-["新幹線の駅がある",shinkansen.includes(p)],
-["空港がある",airports.includes(p)],
-["海に面している",coast.includes(p)],
-["県名と県庁所在地名が一致する",capitalMatch.includes(p)],
-["政令指定都市が1つ以上ある",designated.includes(p)],
-["日本一高い山（富士山）がある",["山梨県","静岡県"].includes(p)],
-["日本一広い湖（琵琶湖）がある",p==="滋賀県"],
-["日本一長い川（信濃川）が流れている",["新潟県","長野県"].includes(p)]
-]
-}));
-
-function clean(s){
-return s.normalize("NFKC")
-.replace(/[？?。、！!\s　]/g,"")
-.replace(/(都|道|府|県)$/,"");
+function normalize(s){
+  return String(s||"").normalize("NFKC").replace(/[\s　、。！？!?]/g,"").replace(/(都|道|府|県)$/,"");
+}
+function shuffledQuestions(){
+  return [...quizData].sort(()=>Math.random()-.5).map(([answer,places])=>({answer,places}));
 }
 
-function buildQuestions(){
-return [...profiles]
-.sort(()=>Math.random()-.5)
-.map(x=>({
-answer:x.p,
-clues:x.clues.map(([label,value])=>({label,value}))
-}));
+let uid=null,roomCode=null,roomData=null,nickname="",unsubscribe=null,timerHandle=null,lastRenderedIndex=-1;
+const roomRef=()=>ref(db,"rooms/"+roomCode);
+
+function showError(prefix,e){alert(prefix+"："+(e?.message||e));}
+function readNickname(){
+  const v=$("nickname").value.trim();
+  if(!v||v.length>12){alert("ニックネームを1〜12文字で入力してね");return null;}
+  return v;
 }
-
-let user=null;
-let room=null;
-let rd=null;
-let name="";
-let off=null;
-let tick=null;
-let shownRound=-1;
-
-const roomRef=()=>ref(db,"rooms/"+room);
-
-function getName(){
-let n=$("nickname").value.trim();
-if(!n||n.length>12){
-alert("ニックネームを1〜12文字で入力してね");
-return null;
-}
-return n;
-}
-
 function renderPlayers(){
-$("players").innerHTML="";
-Object.entries(rd?.players||{}).forEach(([id,p])=>{
-let li=document.createElement("li");
-li.textContent=p.name+(id===rd.host?"（作成者）":"");
-$("players").append(li);
-});
+  $("players").innerHTML="";
+  Object.entries(roomData?.players||{}).forEach(([id,p])=>{
+    const li=document.createElement("li");
+    li.textContent=p.name+(id===roomData.host?"（作成者）":"");
+    $("players").append(li);
+  });
 }
-
-function renderGame(){
-if(!rd||rd.state!=="playing")return;
-
-let idx=rd.questionIndex||0;
-let q=rd.questions?.[idx];
-
-if(!q){
-finishGame();
-return;
+function renderQuestion(){
+  if(!roomData||roomData.state!=="playing")return;
+  const index=roomData.questionIndex||0;
+  const q=roomData.questions?.[index];
+  if(!q){finishScreen();return;}
+  $("progress").textContent=`第${index+1}問`;
+  if(lastRenderedIndex===index)return;
+  lastRenderedIndex=index;
+  $("places").innerHTML="";
+  q.places.forEach(place=>{
+    const li=document.createElement("li");
+    li.textContent=place;
+    $("places").append(li);
+  });
+  $("guess").value="";
+  $("feedback").textContent="";
+  $("lastWinner").textContent=roomData.lastWinnerName?`前問の正解者：${roomData.lastWinnerName}`:"";
 }
-
-$("progress").textContent=`第${idx+1}問`;
-
-if(shownRound!==idx){
-shownRound=idx;
-$("clues").innerHTML="";
-
-q.clues.forEach(c=>{
-let li=document.createElement("li");
-li.textContent=c.label+"："+(c.value?"はい":"いいえ");
-$("clues").append(li);
-});
-
-$("guess").value="";
-$("feedback").textContent="";
-$("lastWinner").textContent=rd.lastWinnerName
-?`前の問題の正解者：${rd.lastWinnerName}`:"";
+function finishScreen(){
+  if(timerHandle){clearInterval(timerHandle);timerHandle=null;}
+  $("game").classList.add("hidden");
+  $("room").classList.add("hidden");
+  $("finish").classList.remove("hidden");
+  const scores=roomData?.scores||{};
+  const players=roomData?.players||{};
+  const ranking=Object.entries(players).map(([id,p])=>({name:p.name,score:scores[id]||0}))
+    .sort((a,b)=>b.score-a.score);
+  $("ranking").innerHTML="";
+  ranking.forEach((p,i)=>{
+    const li=document.createElement("li");
+    li.textContent=`${i+1}位：${p.name} — ${p.score}問正解`;
+    $("ranking").append(li);
+  });
+  $("finishMessage").textContent="100秒終了！おつかれさまでした！";
 }
+function tick(){
+  if(!roomData||roomData.state!=="playing")return;
+  const left=Math.max(0,100-Math.floor((Date.now()-roomData.startedAt)/1000));
+  $("timer").textContent=left;
+  if(left===0){
+    runTransaction(roomRef(),current=>{
+      if(!current||current.state!=="playing")return;
+      current.state="finished";
+      return current;
+    }).catch(e=>console.error(e));
+  }
 }
-
-function finishGame(){
-if(tick){
-clearInterval(tick);
-tick=null;
-}
-
-$("game").classList.add("hidden");
-$("finish").classList.remove("hidden");
-
-let scores=rd.scores||{};
-let players=rd.players||{};
-
-let sorted=Object.entries(players)
-.map(([id,p])=>({
-name:p.name,
-score:scores[id]||0
-}))
-.sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,"ja"));
-
-$("ranking").innerHTML="";
-
-sorted.forEach((p,i)=>{
-let li=document.createElement("li");
-li.textContent=`${i+1}位：${p.name} — ${p.score}問正解`;
-$("ranking").append(li);
-});
-
-$("finishMessage").textContent="100秒終了！おつかれさまでした！";
-}
-
-function updateTimer(){
-if(!rd||rd.state!=="playing")return;
-
-let left=Math.max(
-0,
-100-Math.floor((Date.now()-rd.startedAt)/1000)
-);
-
-$("timer").textContent=left;
-
-if(left<=0){
-runTransaction(roomRef(),old=>{
-if(!old||old.state!=="playing")return;
-old.state="finished";
-return old;
-}).catch(console.error);
-}
-}
-
-function listen(){
-if(off)off();
-
-off=onValue(roomRef(),s=>{
-rd=s.val();
-if(!rd)return;
-
-$("lobby").classList.add("hidden");
-$("room").classList.remove("hidden");
-$("roomCode").textContent=room;
-
-renderPlayers();
-
-if(rd.state==="waiting"){
-$("game").classList.add("hidden");
-$("finish").classList.add("hidden");
-
-$("start").classList.toggle("hidden",rd.host!==user.uid);
-$("waiting").textContent=rd.host===user.uid
-?"参加者がそろったら開始！"
-:"開始を待っています";
-
-}else if(rd.state==="playing"){
-$("room").classList.add("hidden");
-$("game").classList.remove("hidden");
-$("finish").classList.add("hidden");
-
-renderGame();
-updateTimer();
-
-if(!tick)tick=setInterval(updateTimer,250);
-
-}else if(rd.state==="finished"){
-$("room").classList.add("hidden");
-finishGame();
-}
-});
+function subscribeRoom(){
+  if(unsubscribe)unsubscribe();
+  unsubscribe=onValue(roomRef(),snap=>{
+    roomData=snap.val();
+    if(!roomData)return;
+    $("lobby").classList.add("hidden");
+    renderPlayers();
+    if(roomData.state==="waiting"){
+      $("room").classList.remove("hidden");
+      $("game").classList.add("hidden");
+      $("finish").classList.add("hidden");
+      $("roomCode").textContent=roomCode;
+      $("start").classList.toggle("hidden",roomData.host!==uid);
+      $("waiting").textContent=roomData.host===uid?"参加者がそろったらスタート！":"作成者のスタートを待っています";
+    }else if(roomData.state==="playing"){
+      $("room").classList.add("hidden");
+      $("game").classList.remove("hidden");
+      $("finish").classList.add("hidden");
+      renderQuestion();
+      tick();
+      if(!timerHandle)timerHandle=setInterval(tick,250);
+    }else if(roomData.state==="finished"){
+      finishScreen();
+    }
+  });
 }
 
 $("create").onclick=async()=>{
-if(!user)return alert("Firebase接続中です");
-
-name=getName();
-if(!name)return;
-
-try{
-do{
-room=Math.random().toString(36).slice(2,8).toUpperCase();
-}while((await get(ref(db,"rooms/"+room))).exists());
-
-await set(roomRef(),{
-host:user.uid,
-state:"waiting",
-players:{[user.uid]:{name}},
-scores:{[user.uid]:0}
-});
-
-listen();
-
-}catch(e){
-alert("作成エラー："+e.message);
-room=null;
-}
+  if(!uid){alert("Firebase接続中です。少し待ってね");return;}
+  nickname=readNickname();if(!nickname)return;
+  try{
+    let candidate;
+    do{
+      candidate=Math.random().toString(36).slice(2,8).toUpperCase();
+    }while((await get(ref(db,"rooms/"+candidate))).exists());
+    roomCode=candidate;
+    await set(roomRef(),{host:uid,state:"waiting",players:{[uid]:{name:nickname}},scores:{[uid]:0}});
+    subscribeRoom();
+  }catch(e){showError("ルーム作成エラー",e);}
 };
 
 $("join").onclick=async()=>{
-if(!user)return alert("Firebase接続中です");
-
-name=getName();
-if(!name)return;
-
-room=$("code").value.trim().toUpperCase();
-
-if(!room)return alert("ルームコードを入力してね");
-
-try{
-let s=await get(roomRef());
-
-if(!s.exists()||s.val().state!=="waiting"){
-room=null;
-return alert("参加できるルームが見つかりません");
-}
-
-await update(ref(db,"rooms/"+room+"/players/"+user.uid),{name});
-await update(ref(db,"rooms/"+room+"/scores"),{[user.uid]:0});
-
-listen();
-
-}catch(e){
-alert("参加エラー："+e.message);
-room=null;
-}
+  if(!uid){alert("Firebase接続中です。少し待ってね");return;}
+  nickname=readNickname();if(!nickname)return;
+  roomCode=$("code").value.trim().toUpperCase();
+  if(!roomCode){alert("ルームコードを入力してね");return;}
+  try{
+    const snap=await get(roomRef());
+    if(!snap.exists()||snap.val().state!=="waiting"){roomCode=null;alert("参加できるルームが見つかりません");return;}
+    await update(ref(db,"rooms/"+roomCode+"/players/"+uid),{name:nickname});
+    await update(ref(db,"rooms/"+roomCode+"/scores"),{[uid]:0});
+    subscribeRoom();
+  }catch(e){showError("参加エラー",e);}
 };
 
 $("start").onclick=async()=>{
-if(rd?.host!==user.uid)return;
-
-let questions=buildQuestions();
-let scores={};
-
-Object.keys(rd.players||{}).forEach(id=>{
-scores[id]=0;
-});
-
-try{
-await update(roomRef(),{
-state:"playing",
-startedAt:Date.now(),
-questionIndex:0,
-questions,
-scores,
-lastWinnerName:""
-});
-}catch(e){
-alert("開始エラー："+e.message);
-}
+  if(roomData?.host!==uid)return;
+  try{
+    const scores={};
+    Object.keys(roomData.players||{}).forEach(id=>scores[id]=0);
+    lastRenderedIndex=-1;
+    await update(roomRef(),{
+      state:"playing",startedAt:Date.now(),questionIndex:0,
+      questions:shuffledQuestions(),scores,lastWinnerName:""
+    });
+  }catch(e){showError("ゲーム開始エラー",e);}
 };
 
-$("answer").onclick=async()=>{
-if(!rd||rd.state!=="playing")return;
-
-let guess=clean($("guess").value);
-if(!guess)return;
-
-let idx=rd.questionIndex;
-let q=rd.questions?.[idx];
-
-if(!q)return;
-
-if(guess!==clean(q.answer)){
-$("feedback").textContent="違うみたい！何度でも挑戦できるよ。";
-return;
+async function submitAnswer(){
+  if(!roomData||roomData.state!=="playing")return;
+  const guess=normalize($("guess").value);
+  if(!guess)return;
+  const index=roomData.questionIndex;
+  const question=roomData.questions?.[index];
+  if(!question)return;
+  if(guess!==normalize(question.answer)){
+    $("feedback").textContent="不正解！もう一度挑戦してね。";
+    return;
+  }
+  $("answer").disabled=true;
+  try{
+    const result=await runTransaction(roomRef(),current=>{
+      if(!current||current.state!=="playing"||current.questionIndex!==index)return;
+      if(Date.now()-current.startedAt>=100000){current.state="finished";return current;}
+      current.scores=current.scores||{};
+      current.scores[uid]=(current.scores[uid]||0)+1;
+      current.lastWinnerName=current.players?.[uid]?.name||nickname;
+      current.questionIndex=index+1;
+      if(current.questionIndex>=current.questions.length)current.state="finished";
+      return current;
+    });
+    $("feedback").textContent=result.committed?"正解！全員、次の問題へ！":"この問題はすでに次へ進んでいるよ。";
+  }catch(e){$("feedback").textContent="通信エラー："+e.message;}
+  finally{$("answer").disabled=false;}
 }
+$("answer").onclick=submitAnswer;
+$("guess").addEventListener("keydown",e=>{if(e.key==="Enter")submitAnswer();});
 
 try{
-let result=await runTransaction(roomRef(),old=>{
-if(!old||old.state!=="playing"||old.questionIndex!==idx)return;
-
-if(Date.now()-old.startedAt>=100000){
-old.state="finished";
-return old;
-}
-
-old.scores=old.scores||{};
-old.scores[user.uid]=(old.scores[user.uid]||0)+1;
-old.lastWinnerName=old.players?.[user.uid]?.name||name;
-old.questionIndex=(old.questionIndex||0)+1;
-
-if(old.questionIndex>=old.questions.length){
-old.state="finished";
-}
-
-return old;
-});
-
-$("feedback").textContent=result.committed
-?"正解！次の問題へ！"
-:"この問題はすでに次へ進んでいるよ！";
-
+  const credential=await signInAnonymously(auth);
+  uid=credential.user.uid;
+  $("status").textContent="オンライン接続完了";
 }catch(e){
-$("feedback").textContent="通信エラー："+e.message;
-}
-};
-
-try{
-let credential=await signInAnonymously(auth);
-user=credential.user;
-$("status").textContent="オンライン接続完了";
-}catch(e){
-$("status").textContent="接続エラー："+e.code+" / "+e.message;
+  $("status").textContent="接続エラー："+e.code;
+  console.error(e);
 }
 </script>
 </body>
